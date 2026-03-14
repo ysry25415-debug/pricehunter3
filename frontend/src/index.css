@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #050505;
+  color: #ffffff;
+  overflow-y: scroll;
+}
+
+.hero-grid {
+  background-image: radial-gradient(rgba(245, 197, 24, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Subtle yellow-accent scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0b0b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 197, 24, 0.35);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 197, 24, 0.6);
+}
