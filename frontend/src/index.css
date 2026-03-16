@@ -30,3 +30,66 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 197, 24, 0.6);
 }
+
+/* Google CSE styling to match PriceHunter */
+.gcse-search * {
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+}
+
+.gsc-control-cse {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.gsc-search-box {
+  margin: 0 !important;
+  display: flex !important;
+  gap: 12px !important;
+}
+
+.gsc-input-box {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 !important;
+}
+
+input.gsc-input {
+  color: #ffffff !important;
+  font-size: 1.125rem !important;
+  padding-left: 16px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.gsc-search-button-v2 {
+  border: none !important;
+  border-radius: 12px !important;
+  background: #f5c518 !important;
+  height: 48px !important;
+  padding: 0 18px !important;
+  min-width: 140px !important;
+}
+
+.gsc-search-button-v2 svg {
+  fill: #050505 !important;
+}
+
+.gsc-results-wrapper-overlay {
+  background: rgba(15, 15, 15, 0.98) !important;
+  color: #ffffff !important;
+}
+
+.gsc-result .gs-title {
+  color: #f5c518 !important;
+}
+
+.gsc-results-wrapper-nooverlay,
+.gsc-results-wrapper-overlay {
+  display: none !important;
+}

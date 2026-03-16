@@ -8,11 +8,15 @@ const sortOptions = [
   { value: "shipping", label: "Fastest Shipping" }
 ];
 
-const formatMoney = (value) =>
-  new Intl.NumberFormat("en-US", {
+const formatMoney = (value) => {
+  if (!Number.isFinite(value)) {
+    return "N/A";
+  }
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD"
   }).format(value);
+};
 
 export default function Home() {
   const apiBase =
@@ -129,6 +133,7 @@ export default function Home() {
               />
             </div>
           </form>
+
         </section>
       </div>
 
@@ -177,7 +182,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="mt-8 grid gap-6 md:grid-cols-2">
+            <div className="mt-8 grid gap-6">
               {products.map((product) => (
                 <article
                   key={product.id}
@@ -200,12 +205,14 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="mt-6 h-48 w-full rounded-xl object-cover"
-                    loading="lazy"
-                  />
+                  {product.image && (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="mt-6 h-48 w-full rounded-xl object-cover"
+                      loading="lazy"
+                    />
+                  )}
 
                   <div className="mt-6 overflow-hidden rounded-xl border border-white/10">
                     <table className="w-full text-sm">
@@ -227,17 +234,23 @@ export default function Home() {
                           >
                             <td className="px-3 py-3">{offer.store}</td>
                             <td className="px-3 py-3">
-                              {formatMoney(offer.price)}
+                              {Number.isFinite(offer.price)
+                                ? formatMoney(offer.price)
+                                : "-"}
                             </td>
                             <td className="px-3 py-3">
-                              {formatMoney(offer.shippingCost)} -{" "}
-                              {offer.shippingDays}d
+                              {formatMoney(offer.shippingCost)}{" "}
+                              {Number.isFinite(offer.shippingDays)
+                                ? `- ${offer.shippingDays}d`
+                                : ""}
                             </td>
                             <td className="px-3 py-3 font-semibold text-accent">
                               {formatMoney(offer.total)}
                             </td>
                             <td className="px-3 py-3">
-                              {offer.rating.toFixed(1)}
+                              {Number.isFinite(offer.rating)
+                                ? offer.rating.toFixed(1)
+                                : "-"}
                             </td>
                             <td className="px-3 py-3">
                               <a
@@ -246,7 +259,7 @@ export default function Home() {
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                Visit
+                                Buy
                               </a>
                             </td>
                           </tr>

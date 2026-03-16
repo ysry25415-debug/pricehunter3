@@ -3,5 +3,10 @@ dist/
 .env
 *.log
 backend/pricehunter.db
+pricehunter.db
+assistant.db
 frontend/.env
 frontend/.env.*
+assistant_service/.env
+assistant_service/__pycache__/
+assistant_service/.venv/

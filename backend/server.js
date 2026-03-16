@@ -4,9 +4,13 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import OpenAI from "openai";
 import { mockProducts } from "./data/mockProducts.js";
+import { manualProducts } from "./data/manualProducts.js";
 import { initDb, getDb } from "./db.js";
 import { getAmazonStatus, searchAmazon } from "./integrations/amazon.js";
+import { getCjStatus, searchCjProducts } from "./integrations/cj.js";
+import { getCseStatus, searchGoogleCse } from "./integrations/googleCse.js";
 
 dotenv.config();
 
@@ -40,12 +44,13 @@ const computeProductMetrics = (product) => {
 
 // Simple keyword search over mock products to simulate store integrations.
 const searchProducts = (query) => {
+  const combined = [...manualProducts, ...mockProducts];
   if (!query) {
-    return mockProducts.map(computeProductMetrics);
+    return combined.map(computeProductMetrics);
   }
 
   const normalized = query.toLowerCase();
-  return mockProducts
+  return combined
     .filter(
       (product) =>
         product.name.toLowerCase().includes(normalized) ||
@@ -54,21 +59,166 @@ const searchProducts = (query) => {
     .map(computeProductMetrics);
 };
 
+const storeSearchTargets = [
+  {
+    store: "Amazon",
+    domain: "amazon.com",
+    searchUrl: (q) =>
+      `https://www.amazon.com/s?k=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Noon",
+    domain: "noon.com",
+    searchUrl: (q) =>
+      `https://www.noon.com/search/?q=${encodeURIComponent(q)}`
+  },
+  {
+    store: "AliExpress",
+    domain: "aliexpress.com",
+    searchUrl: (q) =>
+      `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Alibaba",
+    domain: "alibaba.com",
+    searchUrl: (q) =>
+      `https://www.alibaba.com/trade/search?SearchText=${encodeURIComponent(q)}`
+  },
+  {
+    store: "DHgate",
+    domain: "dhgate.com",
+    searchUrl: (q) =>
+      `https://www.dhgate.com/wholesale/search.do?searchkey=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Banggood",
+    domain: "banggood.com",
+    searchUrl: (q) =>
+      `https://www.banggood.com/search/${encodeURIComponent(q)}.html`
+  },
+  {
+    store: "CJdropshipping",
+    domain: "cjdropshipping.com",
+    searchUrl: (q) =>
+      `https://cjdropshipping.com/search?search=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Spocket",
+    domain: "spocket.co",
+    searchUrl: (q) =>
+      `https://www.spocket.co/search?q=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Zendrop",
+    domain: "zendrop.com",
+    searchUrl: (q) =>
+      `https://www.zendrop.com/search?q=${encodeURIComponent(q)}`
+  },
+  {
+    store: "DSers",
+    domain: "dsers.com",
+    searchUrl: (q) =>
+      `https://www.dsers.com/places/search?keyword=${encodeURIComponent(q)}`
+  },
+  {
+    store: "SaleHoo",
+    domain: "salehoo.com",
+    searchUrl: (q) =>
+      `https://www.salehoo.com/search?query=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Worldwide Brands",
+    domain: "worldwidebrands.com",
+    searchUrl: (q) =>
+      `https://www.worldwidebrands.com/search?query=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Syncee",
+    domain: "syncee.co",
+    searchUrl: (q) =>
+      `https://syncee.co/?s=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Modalyst",
+    domain: "modalyst.co",
+    searchUrl: (q) =>
+      `https://www.modalyst.co/search?q=${encodeURIComponent(q)}`
+  },
+  {
+    store: "AutoDS",
+    domain: "autods.com",
+    searchUrl: (q) =>
+      `https://autods.com/product-research?keywords=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Doba",
+    domain: "doba.com",
+    searchUrl: (q) =>
+      `https://www.doba.com/product/search?query=${encodeURIComponent(q)}`
+  },
+  {
+    store: "Wholesale2B",
+    domain: "wholesale2b.com",
+    searchUrl: (q) =>
+      `https://www.wholesale2b.com/search?query=${encodeURIComponent(q)}`
+  }
+];
+
+const generateStoreSearchResults = (query) => {
+  if (!query) {
+    return [];
+  }
+
+  const offers = storeSearchTargets.map((target) => ({
+    store: target.store,
+    price: null,
+    shippingCost: null,
+    shippingDays: null,
+    rating: null,
+    buyLink: target.searchUrl(query)
+  }));
+
+  return [
+    {
+      id: `store-bundle-${encodeURIComponent(query)}`,
+      name: query,
+      description: `Best matching stores for "${query}".`,
+      image: `https://source.unsplash.com/featured/?${encodeURIComponent(query)}`,
+      offers,
+      lowestTotal: null,
+      bestRating: null,
+      fastestShipping: null
+    }
+  ];
+};
+
 const sortProducts = (products, sort) => {
   const sorted = [...products];
+  const safeNumber = (value, fallback) =>
+    Number.isFinite(value) ? value : fallback;
 
   if (sort === "rating") {
-    sorted.sort((a, b) => b.bestRating - a.bestRating);
+    sorted.sort(
+      (a, b) => safeNumber(b.bestRating, -1) - safeNumber(a.bestRating, -1)
+    );
     return sorted;
   }
 
   if (sort === "shipping") {
-    sorted.sort((a, b) => a.fastestShipping - b.fastestShipping);
+    sorted.sort(
+      (a, b) =>
+        safeNumber(a.fastestShipping, Infinity) -
+        safeNumber(b.fastestShipping, Infinity)
+    );
     return sorted;
   }
 
   // Default to cheapest total price.
-  sorted.sort((a, b) => a.lowestTotal - b.lowestTotal);
+  sorted.sort(
+    (a, b) =>
+      safeNumber(a.lowestTotal, Infinity) -
+      safeNumber(b.lowestTotal, Infinity)
+  );
   return sorted;
 };
 
@@ -99,22 +249,54 @@ const mailTransporter = smtpReady
   ? nodemailer.createTransport(smtpConfig)
   : null;
 
+const openaiClient = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
 initDb().catch((error) => {
   console.error("Failed to initialize database:", error);
 });
 
-app.get("/api/products/search", (req, res) => {
+app.get("/api/products/search", async (req, res) => {
   const query = req.query.q || "";
   const sort = req.query.sort || "cheapest";
   const market = req.query.market || "eg";
+  const source = req.query.source || "stores";
 
-  const results = searchProducts(query);
+  let results = [];
+
+  try {
+    if (source === "cj") {
+      results = await searchCjProducts(query);
+    } else if (source === "stores") {
+      results = generateStoreSearchResults(query);
+    } else if (source === "manual") {
+      results = searchProducts(query);
+    } else if (source === "cse") {
+      results = await searchGoogleCse(query, { count: 20 });
+      if (!results.length) {
+        results = generateStoreSearchResults(query);
+      }
+    } else if (source === "mock") {
+      results = searchProducts(query);
+    } else {
+      const cjResults = await searchCjProducts(query).catch(() => []);
+      const mockResults = searchProducts(query);
+      const cseResults = await searchGoogleCse(query, { count: 20 }).catch(() => []);
+      results = [...cseResults, ...cjResults, ...mockResults];
+    }
+  } catch (error) {
+    console.error("Search failed:", error);
+    results = searchProducts(query);
+  }
+
   const sortedResults = sortProducts(results, sort);
 
   res.json({
     query,
     sort,
     market,
+    source,
     count: sortedResults.length,
     products: sortedResults
   });
@@ -123,6 +305,50 @@ app.get("/api/products/search", (req, res) => {
 app.get("/api/integrations/amazon/status", (req, res) => {
   const market = req.query.market || "eg";
   res.json(getAmazonStatus(market));
+});
+
+app.get("/api/integrations/cj/status", (req, res) => {
+  res.json(getCjStatus());
+});
+
+app.get("/api/integrations/google/status", (req, res) => {
+  res.json(getCseStatus());
+});
+
+app.post("/api/assistant/ask", async (req, res) => {
+  const { message, history } = req.body || {};
+
+  if (!message || typeof message !== "string") {
+    return res.status(400).json({ message: "Message is required." });
+  }
+
+  if (!openaiClient) {
+    return res.status(500).json({ message: "OpenAI API key is not configured." });
+  }
+
+  const systemPrompt = `You are the PriceHunter assistant. Be concise and helpful.
+You know the site features: price comparison, search bar, AI image search (placeholder),
+Top matches section, dropshipping drawer, plans, and account menu.
+If asked about prices, explain that some results may not include live prices yet.
+If asked how to use the site, give step-by-step guidance.`;
+
+  const safeHistory = Array.isArray(history) ? history.slice(-6) : [];
+
+  try {
+    const response = await openaiClient.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        { role: "system", content: systemPrompt },
+        ...safeHistory,
+        { role: "user", content: message }
+      ]
+    });
+
+    return res.json({ reply: response.output_text });
+  } catch (error) {
+    console.error("Assistant failed:", error);
+    return res.status(500).json({ message: "Assistant request failed." });
+  }
 });
 
 app.post("/api/auth/signup", async (req, res) => {

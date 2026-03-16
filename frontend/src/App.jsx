@@ -19,6 +19,15 @@ export default function App() {
   const [userEmail, setUserEmail] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeLevel, setThemeLevel] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantMessages, setAssistantMessages] = useState([
+    {
+      role: "assistant",
+      content: "Hi! I can help you use PriceHunter. Ask me anything."
+    }
+  ]);
+  const [assistantStatus, setAssistantStatus] = useState("idle");
 
   const themePercent = Math.min(Math.max(themeLevel, 0), 100) / 100;
   const baseColor = {
@@ -66,6 +75,56 @@ export default function App() {
     setUserEmail("");
     setMenuOpen(false);
     window.location.href = "/";
+  };
+
+  const sendAssistantMessage = async () => {
+    const trimmed = assistantInput.trim();
+    if (!trimmed || assistantStatus === "loading") {
+      return;
+    }
+
+    const assistantUrl =
+      import.meta.env.VITE_ASSISTANT_URL || "http://localhost:8000/assistant/ask";
+
+    const nextMessages = [
+      ...assistantMessages,
+      { role: "user", content: trimmed }
+    ];
+    setAssistantMessages(nextMessages);
+    setAssistantInput("");
+    setAssistantStatus("loading");
+
+    try {
+      const response = await fetch(assistantUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: trimmed,
+          user_id: userEmail || "guest",
+          history: nextMessages.map((msg) => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Assistant request failed");
+      }
+
+      const payload = await response.json();
+      setAssistantMessages([
+        ...nextMessages,
+        { role: "assistant", content: payload.reply || "No response." }
+      ]);
+    } catch (error) {
+      setAssistantMessages([
+        ...nextMessages,
+        { role: "assistant", content: "Sorry, I could not answer that yet." }
+      ]);
+    } finally {
+      setAssistantStatus("idle");
+    }
   };
 
   return (
@@ -169,6 +228,70 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
         </Routes>
+
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            type="button"
+            className="rounded-full border border-accent/50 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+            onClick={() => setAssistantOpen((open) => !open)}
+          >
+            Assistant
+          </button>
+        </div>
+
+        {assistantOpen && (
+          <div className="fixed bottom-20 right-6 z-50 w-[320px] max-w-[85vw] rounded-2xl border border-white/10 bg-panel/95 p-4 shadow-2xl">
+            <div className="flex items-center justify-between text-sm text-muted">
+              <span>PriceHunter Assistant</span>
+              <button
+                type="button"
+                className="text-xs uppercase tracking-[0.2em] text-muted transition hover:text-accent"
+                onClick={() => setAssistantOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-1 text-sm">
+              {assistantMessages.map((msg, index) => (
+                <div
+                  key={`${msg.role}-${index}`}
+                  className={`rounded-xl px-3 py-2 ${
+                    msg.role === "user"
+                      ? "bg-accent/15 text-accent"
+                      : "bg-black/40 text-white/90"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              ))}
+              {assistantStatus === "loading" && (
+                <div className="rounded-xl bg-black/40 px-3 py-2 text-white/70">
+                  Thinking...
+                </div>
+              )}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={assistantInput}
+                onChange={(event) => setAssistantInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    sendAssistantMessage();
+                  }
+                }}
+                placeholder="Ask about PriceHunter..."
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition focus:border-accent"
+              />
+              <button
+                type="button"
+                className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:brightness-110"
+                onClick={sendAssistantMessage}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </BrowserRouter>
   );
