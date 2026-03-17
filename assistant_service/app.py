@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from openai import OpenAI
+import httpx
 
 load_dotenv()
 
@@ -24,15 +25,88 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_openai_client() -> OpenAI:
+def get_openai_client() -> Optional[OpenAI]:
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
-        raise ValueError("OPENAI_API_KEY is missing.")
+        return None
     try:
         api_key.encode("ascii")
     except UnicodeEncodeError as exc:
         raise ValueError("OPENAI_API_KEY has non-ASCII characters.") from exc
     return OpenAI(api_key=api_key)
+
+
+def local_assistant_reply(message: str, profile: dict) -> str:
+    text = message.lower()
+    if any(word in text for word in ["search", "find", "product", "price", "compare", "سعر", "بحث", "منتج"]):
+        return (
+            "Use the main search bar to enter a product name. "
+            "Then review Top matches to compare stores. "
+            "You can sort by cheapest total, best rating, or fastest shipping."
+        )
+    if any(word in text for word in ["image", "photo", "camera", "صورة", "تصوير"]):
+        return (
+            "The AI image search button lets you upload a product photo. "
+            "Image matching is a placeholder right now and will be enabled in a future update."
+        )
+    if any(word in text for word in ["dropship", "dropshipping", "دروب"]):
+        return (
+            "Open the Dropship drawer to set your target country and category. "
+            "The plans show how many stores you can compare: Free 5, Standard 10, Pro 15."
+        )
+    if any(word in text for word in ["account", "login", "signup", "sign up", "تسجيل", "حساب"]):
+        return (
+            "Use Login or Sign up to access your account. "
+            "After logging in, you can manage account settings and view your saved activity."
+        )
+    if any(word in text for word in ["plan", "price", "pricing", "subscription", "اشتراك", "خطة"]):
+        return (
+            "Plans: Free $0 (5 stores), Standard $1 (10 stores), Pro $3 (15 stores). "
+            "Upgrade any time from the Dropship drawer."
+        )
+    return (
+        "I can help with search, Top matches, dropshipping plans, and account help. "
+        "Tell me what you want to do, and I will guide you."
+    )
+
+
+def ollama_reply(message: str, profile: dict, history: List[dict]) -> Optional[str]:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL", "llama3")
+    system_prompt = (
+        "You are the PriceHunter assistant. Be concise and helpful. "
+        "You know the site features: price comparison, search bar, AI image search (placeholder), "
+        "Top matches section, dropshipping drawer, plans, and account menu. "
+        "If asked about prices, explain that some results may not include live prices yet. "
+        "If asked how to use the site, give step-by-step guidance."
+    )
+    user_context = f"User profile: {json.dumps(profile)}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": user_context},
+        *history,
+        {"role": "user", "content": message},
+    ]
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            response = client.post(
+                f"{base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": False,
+                },
+            )
+        if response.status_code != 200:
+            logging.warning("Ollama error: %s", response.text)
+            return None
+        data = response.json()
+        return (data.get("message") or {}).get("content")
+    except Exception:
+        logging.exception("Ollama request failed")
+        return None
 
 DB_PATH = "assistant.db"
 
@@ -183,10 +257,18 @@ def ask_assistant(payload: AssistantRequest) -> AssistantResponse:
 
     user_context = f"User profile: {json.dumps(profile)}"
 
+    client = None
     try:
         client = get_openai_client()
-    except ValueError as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
+    except ValueError:
+        client = None
+
+    if not client:
+        reply = ollama_reply(payload.message, profile, history)
+        if not reply:
+            reply = local_assistant_reply(payload.message, profile)
+        add_message(payload.user_id, "assistant", reply)
+        return AssistantResponse(reply=reply, profile=profile)
 
     try:
         response = client.responses.create(
@@ -202,9 +284,13 @@ def ask_assistant(payload: AssistantRequest) -> AssistantResponse:
         reply = response.output_text
         add_message(payload.user_id, "assistant", reply)
         return AssistantResponse(reply=reply, profile=profile)
-    except Exception as exc:
+    except Exception:
         logging.exception("Assistant request failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        reply = ollama_reply(payload.message, profile, history)
+        if not reply:
+            reply = local_assistant_reply(payload.message, profile)
+        add_message(payload.user_id, "assistant", reply)
+        return AssistantResponse(reply=reply, profile=profile)
 
 
 @app.get("/assistant/health")

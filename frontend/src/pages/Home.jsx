@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../lib/supabaseClient.js";
 
 const DEFAULT_QUERY = "wireless earbuds";
 
@@ -6,6 +7,12 @@ const sortOptions = [
   { value: "cheapest", label: "Cheapest Total" },
   { value: "rating", label: "Best Rating" },
   { value: "shipping", label: "Fastest Shipping" }
+];
+
+const CHAT_CHANNELS = [
+  { id: "team", name: "PriceHunter Crew" },
+  { id: "dropship", name: "Dropship Q&A" },
+  { id: "alerts", name: "Deals & Alerts" }
 ];
 
 const formatMoney = (value) => {
@@ -22,12 +29,25 @@ export default function Home() {
   const apiBase =
     import.meta.env.VITE_API_BASE ||
     (window.location.hostname === "localhost" ? "http://localhost:3001" : "");
+  const chatUserName = useMemo(
+    () => localStorage.getItem("ph_email") || "Guest",
+    []
+  );
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [sort, setSort] = useState("cheapest");
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [dropshipOpen, setDropshipOpen] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState("team");
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState({
+    team: [],
+    dropship: [],
+    alerts: []
+  });
+  const [chatStatus, setChatStatus] = useState("idle");
   const [dropshipCountry, setDropshipCountry] = useState("");
   const [dropshipCategory, setDropshipCategory] = useState("electronics");
   const [selectedPlan, setSelectedPlan] = useState("free");
@@ -78,6 +98,93 @@ export default function Home() {
       setMessage("Image received. AI search is coming soon.");
     }
   };
+
+  const activeThread = useMemo(
+    () => CHAT_CHANNELS.find((thread) => thread.id === activeChatId),
+    [activeChatId]
+  );
+  const activeMessages = chatMessages[activeChatId] || [];
+
+  const handleSendChat = async () => {
+    const trimmed = chatInput.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (!supabase) {
+      setMessage("Community chat is not connected yet. Add Supabase keys.");
+      return;
+    }
+
+    const userName = chatUserName;
+    const userId =
+      localStorage.getItem("ph_chat_id") ||
+      `guest-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem("ph_chat_id", userId);
+
+    setChatInput("");
+    setChatStatus("loading");
+    await supabase.from("community_messages").insert({
+      channel: activeChatId,
+      user_id: userId,
+      user_name: userName,
+      content: trimmed
+    });
+    setChatStatus("idle");
+  };
+
+  useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadMessages = async () => {
+      setChatStatus("loading");
+      const updates = {};
+      for (const channel of CHAT_CHANNELS) {
+        const { data } = await supabase
+          .from("community_messages")
+          .select("id, channel, user_name, content, created_at")
+          .eq("channel", channel.id)
+          .order("created_at", { ascending: true })
+          .limit(50);
+        updates[channel.id] = data || [];
+      }
+      if (isMounted) {
+        setChatMessages((prev) => ({ ...prev, ...updates }));
+        setChatStatus("idle");
+      }
+    };
+
+    loadMessages();
+
+    const channel = supabase
+      .channel("community_messages")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "community_messages" },
+        (payload) => {
+          if (!isMounted) {
+            return;
+          }
+          const record = payload.new;
+          setChatMessages((prev) => {
+            const list = prev[record.channel] || [];
+            return {
+              ...prev,
+              [record.channel]: [...list, record]
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen text-white">
@@ -273,19 +380,35 @@ export default function Home() {
         </div>
       </section>
 
-      <button
-        type="button"
-        className="fixed right-4 top-6 z-40 rounded-full border border-accent/60 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
-        onClick={() => setDropshipOpen((open) => !open)}
-      >
-        Dropship
-      </button>
+      <div className="fixed right-4 top-6 z-40 flex flex-col gap-3">
+        <button
+          type="button"
+          className="rounded-full border border-accent/60 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+          onClick={() => setDropshipOpen((open) => !open)}
+        >
+          Dropship
+        </button>
+        <button
+          type="button"
+          className="rounded-full border border-accent/60 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+          onClick={() => setCommunityOpen((open) => !open)}
+        >
+          Community
+        </button>
+      </div>
 
       <div
         className={`fixed inset-0 z-40 bg-black/60 transition ${
           dropshipOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setDropshipOpen(false)}
+      />
+
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 transition ${
+          communityOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setCommunityOpen(false)}
       />
 
       <aside
@@ -393,6 +516,95 @@ export default function Home() {
           </div>
           <div className="mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-muted">
             Plans activate after payment confirmation.
+          </div>
+        </div>
+      </aside>
+
+      <aside
+        className={`fixed left-1/2 top-0 z-50 w-full max-w-4xl -translate-x-1/2 transform border-b border-white/10 bg-panel/95 p-6 shadow-2xl transition overflow-y-auto ${
+          communityOpen ? "translate-y-0" : "-translate-y-full"
+        }`}
+        style={{ maxHeight: "75vh" }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.3em] text-muted">
+            Community
+          </p>
+          <button
+            type="button"
+            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted transition hover:border-accent/40"
+            onClick={() => setCommunityOpen(false)}
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-[180px_1fr]">
+          <div className="space-y-2">
+            {CHAT_CHANNELS.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                className={`w-full rounded-xl border px-4 py-3 text-left text-xs transition ${
+                  activeChatId === thread.id
+                    ? "border-accent/60 bg-accent/10 text-accent"
+                    : "border-white/10 text-white/80 hover:border-accent/40"
+                }`}
+                onClick={() => setActiveChatId(thread.id)}
+              >
+                {thread.name}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col">
+            <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
+              {activeMessages.length === 0 && (
+                <div className="text-xs text-muted">
+                  No messages yet. Start the conversation.
+                </div>
+              )}
+              {activeMessages.map((msg) => (
+                <div key={msg.id}>
+                  <span className="font-semibold text-accent/80">
+                    {msg.user_name || "Guest"}:
+                  </span>{" "}
+                  {msg.content}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSendChat();
+                  }
+                }}
+                placeholder="Message the community..."
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition focus:border-accent"
+              />
+              <button
+                type="button"
+                className="rounded-xl bg-accent px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:brightness-110"
+                onClick={handleSendChat}
+                disabled={!supabase || chatStatus === "loading"}
+              >
+                {chatStatus === "loading" ? "Sending..." : "Send"}
+              </button>
+            </div>
+            {!supabase && (
+              <p className="mt-2 text-[10px] text-amber-200/80">
+                Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable
+                community chat.
+              </p>
+            )}
+            {supabase && (
+              <p className="mt-2 text-[10px] text-muted">
+                Community chat is live. Messages sync across accounts in real
+                time.
+              </p>
+            )}
           </div>
         </div>
       </aside>

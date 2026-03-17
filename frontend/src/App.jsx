@@ -20,14 +20,110 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeLevel, setThemeLevel] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantInput, setAssistantInput] = useState("");
   const [assistantMessages, setAssistantMessages] = useState([
     {
       role: "assistant",
       content: "Hi! I can help you use PriceHunter. Ask me anything."
     }
   ]);
-  const [assistantStatus, setAssistantStatus] = useState("idle");
+
+  const assistantFaq = [
+    {
+      question: "How do I compare prices?",
+      answer:
+        "Use the main search bar to enter a product name. Then check Top matches to compare stores and sort by cheapest total, best rating, or fastest shipping."
+    },
+    {
+      question: "How does AI image search work?",
+      answer:
+        "Tap AI image search to upload a product photo. Image matching is a placeholder right now and will be enabled in a future update."
+    },
+    {
+      question: "Why do some prices show as N/A?",
+      answer:
+        "Some store links are currently placeholders without live pricing. We show N/A until live price feeds are connected."
+    },
+    {
+      question: "How do I sort results?",
+      answer:
+        "Use the Sort by dropdown in Top matches to switch between cheapest total, best rating, or fastest shipping."
+    },
+    {
+      question: "What does 'Lowest total' mean?",
+      answer:
+        "It combines product price and shipping cost to show the best overall deal."
+    },
+    {
+      question: "What is the Dropship drawer for?",
+      answer:
+        "Open the Dropship drawer to set your target country and category, then choose a plan based on how many stores you want to compare."
+    },
+    {
+      question: "What are the plans and store limits?",
+      answer:
+        "Free compares 5 stores, Standard compares 10 stores, and Pro compares 15 stores. You can upgrade anytime from the Dropship drawer."
+    },
+    {
+      question: "Can I change my plan later?",
+      answer:
+        "Yes. You can upgrade or downgrade any time from the Dropship drawer."
+    },
+    {
+      question: "What categories are supported?",
+      answer:
+        "You can choose Electronics, Clothing, or Shoes in the Dropship drawer."
+    },
+    {
+      question: "Where do I manage my account?",
+      answer:
+        "Use the account menu in the top-right after you log in to access settings, transactions, alerts, and billing."
+    },
+    {
+      question: "How do I create an account?",
+      answer:
+        "Click Sign up in the top-right and enter your email and password to create your account."
+    },
+    {
+      question: "How do I log in?",
+      answer:
+        "Click Log in in the top-right and enter the email and password you used to sign up."
+    },
+    {
+      question: "I forgot my password. What should I do?",
+      answer:
+        "Password reset will be available soon. For now, create a new account or contact support."
+    },
+    {
+      question: "How do I contact support?",
+      answer:
+        "Open the account menu and choose Support. We will guide you through next steps."
+    },
+    {
+      question: "Why am I not seeing results?",
+      answer:
+        "Try a more specific product name in English. If results are still empty, clear the search and try again."
+    },
+    {
+      question: "Which stores are included?",
+      answer:
+        "We aggregate results from popular dropshipping-friendly stores like Amazon, Noon, AliExpress, Alibaba, and others."
+    },
+    {
+      question: "Do you show live prices from every store?",
+      answer:
+        "Not yet. Some stores are links only. Live pricing will be enabled as integrations roll out."
+    },
+    {
+      question: "Can I buy directly from PriceHunter?",
+      answer:
+        "No. PriceHunter compares prices and sends you to the store to complete your purchase."
+    },
+    {
+      question: "How often are prices updated?",
+      answer:
+        "Update speed depends on your plan. Pro updates most frequently; Free updates least frequently."
+    }
+  ];
 
   const themePercent = Math.min(Math.max(themeLevel, 0), 100) / 100;
   const baseColor = {
@@ -77,54 +173,12 @@ export default function App() {
     window.location.href = "/";
   };
 
-  const sendAssistantMessage = async () => {
-    const trimmed = assistantInput.trim();
-    if (!trimmed || assistantStatus === "loading") {
-      return;
-    }
-
-    const assistantUrl =
-      import.meta.env.VITE_ASSISTANT_URL || "http://localhost:8000/assistant/ask";
-
-    const nextMessages = [
-      ...assistantMessages,
-      { role: "user", content: trimmed }
-    ];
-    setAssistantMessages(nextMessages);
-    setAssistantInput("");
-    setAssistantStatus("loading");
-
-    try {
-      const response = await fetch(assistantUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          user_id: userEmail || "guest",
-          history: nextMessages.map((msg) => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Assistant request failed");
-      }
-
-      const payload = await response.json();
-      setAssistantMessages([
-        ...nextMessages,
-        { role: "assistant", content: payload.reply || "No response." }
-      ]);
-    } catch (error) {
-      setAssistantMessages([
-        ...nextMessages,
-        { role: "assistant", content: "Sorry, I could not answer that yet." }
-      ]);
-    } finally {
-      setAssistantStatus("idle");
-    }
+  const handleAssistantFaq = (item) => {
+    setAssistantMessages((prev) => [
+      ...prev,
+      { role: "user", content: item.question },
+      { role: "assistant", content: item.answer }
+    ]);
   };
 
   return (
@@ -232,15 +286,16 @@ export default function App() {
         <div className="fixed bottom-6 right-6 z-50">
           <button
             type="button"
-            className="rounded-full border border-accent/50 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+            className="flex h-14 w-14 items-center justify-center rounded-full border border-accent/50 bg-panel/80 text-xl text-accent shadow-glow transition hover:bg-accent/10"
             onClick={() => setAssistantOpen((open) => !open)}
+            aria-label="Assistant"
           >
-            Assistant
+            ✦
           </button>
         </div>
 
         {assistantOpen && (
-          <div className="fixed bottom-20 right-6 z-50 w-[320px] max-w-[85vw] rounded-2xl border border-white/10 bg-panel/95 p-4 shadow-2xl">
+          <div className="fixed bottom-20 right-6 z-50 w-[320px] max-w-[85vw] max-h-[60vh] overflow-hidden rounded-2xl border border-white/10 bg-panel/95 p-4 shadow-2xl">
             <div className="flex items-center justify-between text-sm text-muted">
               <span>PriceHunter Assistant</span>
               <button
@@ -251,7 +306,7 @@ export default function App() {
                 Close
               </button>
             </div>
-            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-1 text-sm">
+            <div className="mt-4 max-h-48 space-y-3 overflow-y-auto pr-1 text-sm">
               {assistantMessages.map((msg, index) => (
                 <div
                   key={`${msg.role}-${index}`}
@@ -264,31 +319,23 @@ export default function App() {
                   {msg.content}
                 </div>
               ))}
-              {assistantStatus === "loading" && (
-                <div className="rounded-xl bg-black/40 px-3 py-2 text-white/70">
-                  Thinking...
-                </div>
-              )}
             </div>
-            <div className="mt-3 flex gap-2">
-              <input
-                value={assistantInput}
-                onChange={(event) => setAssistantInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    sendAssistantMessage();
-                  }
-                }}
-                placeholder="Ask about PriceHunter..."
-                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition focus:border-accent"
-              />
-              <button
-                type="button"
-                className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:brightness-110"
-                onClick={sendAssistantMessage}
-              >
-                Send
-              </button>
+            <div className="mt-4 border-t border-white/10 pt-3 max-h-40 overflow-y-auto pr-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted">
+                Quick questions
+              </p>
+              <div className="mt-3 space-y-2">
+                {assistantFaq.map((item) => (
+                  <button
+                    key={item.question}
+                    type="button"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-left text-xs text-white/80 transition hover:border-accent/40 hover:text-white"
+                    onClick={() => handleAssistantFaq(item)}
+                  >
+                    {item.question}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
