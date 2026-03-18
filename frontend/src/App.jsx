@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import { supabase } from "./lib/supabaseClient.js";
 
 const navLinkClasses =
   "rounded-lg px-3 py-2 text-sm font-semibold uppercase tracking-wide transition";
 
-const getStoredToken = () => localStorage.getItem("ph_token");
 const getStoredName = () => localStorage.getItem("ph_name");
 const getStoredUserId = () => localStorage.getItem("ph_user_id");
 const getStoredPlan = () => localStorage.getItem("ph_plan");
@@ -147,48 +147,59 @@ export default function App() {
   const overlayOpacity = themePercent * 0.55;
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
+    if (!supabase) {
       return;
     }
 
-    fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Session invalid");
+    const hydrateFromUser = (user) => {
+      if (!user) {
+        return;
+      }
+      const meta = user.user_metadata || {};
+      const displayName = meta.username || user.email || "";
+      const plan = meta.plan || "free";
+      setUserEmail(user.email || "");
+      setUserName(displayName);
+      setNameInput(displayName);
+      setUserPlan(plan);
+      setPlanInput(plan);
+      localStorage.setItem("ph_name", displayName);
+      localStorage.setItem("ph_plan", plan);
+      localStorage.setItem("ph_user_id", String(user.id));
+      if (user.email) {
+        localStorage.setItem("ph_email", user.email);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      hydrateFromUser(data?.session?.user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.user) {
+          hydrateFromUser(session.user);
+        } else {
+          setUserEmail("");
+          setUserName("");
+          setUserPlan("free");
+          localStorage.removeItem("ph_name");
+          localStorage.removeItem("ph_plan");
+          localStorage.removeItem("ph_user_id");
+          localStorage.removeItem("ph_email");
         }
-        return response.json();
-      })
-      .then((payload) => {
-        if (payload.user?.email) {
-          setUserEmail(payload.user.email);
-          setUserName(payload.user.username || payload.user.email);
-          setNameInput(payload.user.username || payload.user.email);
-          const nextPlan = payload.user.plan || "free";
-          setUserPlan(nextPlan);
-          setPlanInput(nextPlan);
-          localStorage.setItem("ph_plan", nextPlan);
-          if (payload.user?.id) {
-            localStorage.setItem("ph_user_id", String(payload.user.id));
-          }
-        }
-      })
-      .catch(() => {
-        localStorage.removeItem("ph_token");
-      });
+      }
+    );
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   const handleLogout = async () => {
-    const token = getStoredToken();
-    if (token) {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
+    if (supabase) {
+      await supabase.auth.signOut();
     }
-    localStorage.removeItem("ph_token");
     localStorage.removeItem("ph_email");
     localStorage.removeItem("ph_name");
     localStorage.removeItem("ph_user_id");
@@ -215,12 +226,6 @@ export default function App() {
   };
 
   const handleSaveProfile = async () => {
-    const token = getStoredToken();
-    if (!token) {
-      setSaveMessage("Please log in again.");
-      return;
-    }
-
     if (!nameInput.trim() || nameInput.trim().length < 2) {
       setSaveMessage("Username must be at least 2 characters.");
       return;
@@ -230,22 +235,16 @@ export default function App() {
     setSaveMessage("");
 
     try {
-      const response = await fetch("/api/auth/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ username: nameInput.trim() })
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Update failed.");
+      if (!supabase) {
+        throw new Error("Auth is not connected.");
       }
-
-      const payload = await response.json();
-      const nextName = payload.user?.username || nameInput.trim();
+      const { data, error } = await supabase.auth.updateUser({
+        data: { username: nameInput.trim() }
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
+      const nextName = data?.user?.user_metadata?.username || nameInput.trim();
       setUserName(nextName);
       localStorage.setItem("ph_name", nextName);
       setSaveStatus("idle");
@@ -257,32 +256,20 @@ export default function App() {
   };
 
   const handleSavePlan = async () => {
-    const token = getStoredToken();
-    if (!token) {
-      setPlanMessage("Please log in again.");
-      return;
-    }
-
     setPlanStatus("loading");
     setPlanMessage("");
 
     try {
-      const response = await fetch("/api/auth/plan", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ plan: planInput })
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Update failed.");
+      if (!supabase) {
+        throw new Error("Auth is not connected.");
       }
-
-      const payload = await response.json();
-      const nextPlan = payload.user?.plan || planInput;
+      const { data, error } = await supabase.auth.updateUser({
+        data: { plan: planInput }
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
+      const nextPlan = data?.user?.user_metadata?.plan || planInput;
       setUserPlan(nextPlan);
       localStorage.setItem("ph_plan", nextPlan);
       window.dispatchEvent(

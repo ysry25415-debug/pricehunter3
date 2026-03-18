@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient.js";
 
 const isValidEmail = (value) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-const getStoredToken = () => localStorage.getItem("ph_token");
 const getStoredEmail = () => localStorage.getItem("ph_email");
 const getStoredName = () => localStorage.getItem("ph_name");
 const getStoredUserId = () => localStorage.getItem("ph_user_id");
@@ -23,33 +23,23 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
+    if (!supabase) {
       return;
     }
-
-    fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Session invalid");
-        }
-        return response.json();
-      })
-      .then((payload) => {
-        if (payload.user?.email) {
-          setIsLoggedIn(true);
-          setEmail(payload.user.email);
-          setUsername(payload.user.username || payload.user.email);
-          setUserId(String(payload.user.id || ""));
-          setPlan(payload.user.plan || "free");
-          localStorage.setItem("ph_plan", payload.user.plan || "free");
-        }
-      })
-      .catch(() => {
-        localStorage.removeItem("ph_token");
-      });
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data?.session?.user;
+      if (user?.email) {
+        const meta = user.user_metadata || {};
+        setIsLoggedIn(true);
+        setEmail(user.email);
+        setUsername(meta.username || user.email);
+        setUserId(String(user.id));
+        setPlan(meta.plan || "free");
+        localStorage.setItem("ph_plan", meta.plan || "free");
+        localStorage.setItem("ph_user_id", String(user.id));
+        localStorage.setItem("ph_name", meta.username || user.email);
+      }
+    });
   }, []);
 
   const handleLogin = async (event) => {
@@ -69,30 +59,24 @@ export default function Login() {
     setStatus("loading");
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+      if (!supabase) {
+        throw new Error("Auth is not connected.");
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Login failed");
+      if (error) {
+        throw new Error(error.message || "Login failed");
       }
-
-      const payload = await response.json();
-      localStorage.setItem("ph_token", payload.token);
-      localStorage.setItem("ph_email", payload.user.email);
-      localStorage.setItem("ph_name", payload.user.username || payload.user.email);
-      if (payload.user?.id) {
-        localStorage.setItem("ph_user_id", String(payload.user.id));
-      }
-      if (payload.user?.plan) {
-        localStorage.setItem("ph_plan", payload.user.plan);
-        setPlan(payload.user.plan);
-      } else {
-        localStorage.setItem("ph_plan", "free");
-        setPlan("free");
+      const user = data?.user;
+      const meta = user?.user_metadata || {};
+      if (user?.email) {
+        localStorage.setItem("ph_email", user.email);
+        localStorage.setItem("ph_name", meta.username || user.email);
+        localStorage.setItem("ph_user_id", String(user.id));
+        localStorage.setItem("ph_plan", meta.plan || "free");
+        setPlan(meta.plan || "free");
       }
       setIsLoggedIn(true);
       setStatus("idle");
@@ -104,14 +88,9 @@ export default function Login() {
   };
 
   const handleLogout = async () => {
-    const token = getStoredToken();
-    if (token) {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
+    if (supabase) {
+      await supabase.auth.signOut();
     }
-    localStorage.removeItem("ph_token");
     localStorage.removeItem("ph_email");
     localStorage.removeItem("ph_name");
     localStorage.removeItem("ph_user_id");

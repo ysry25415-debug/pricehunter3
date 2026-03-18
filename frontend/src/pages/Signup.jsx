@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient.js";
 
 const isValidEmail = (value) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -12,6 +14,7 @@ export default function Signup() {
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [isCreated, setIsCreated] = useState(false);
+  const navigate = useNavigate();
 
   const handleSignup = async (event) => {
     event.preventDefault();
@@ -35,22 +38,29 @@ export default function Signup() {
     setStatus("loading");
 
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, username, plan })
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Signup failed");
+      if (!supabase) {
+        throw new Error("Auth is not connected.");
       }
-
-      await response.json();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username.trim(),
+            plan
+          }
+        }
+      });
+      if (error) {
+        throw new Error(error.message || "Signup failed");
+      }
       setIsCreated(true);
       setStatus("idle");
+      localStorage.setItem("ph_plan", plan);
+      localStorage.setItem("ph_name", username.trim());
+      localStorage.setItem("ph_email", email);
       setTimeout(() => {
-        window.location.href = "/login";
+        navigate("/login");
       }, 1200);
     } catch (error) {
       setStatus("idle");

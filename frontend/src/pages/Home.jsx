@@ -123,30 +123,21 @@ export default function Home() {
   }, [chatId]);
 
   useEffect(() => {
-    const token = localStorage.getItem("ph_token");
-    if (!token) {
+    if (!supabase) {
       return;
     }
-
-    fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Session invalid");
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data?.session?.user;
+      const meta = user?.user_metadata || {};
+      if (meta.username || user?.email) {
+        const name = meta.username || user.email;
+        setChatUserName(name);
+        localStorage.setItem("ph_name", name);
+        if (user?.id) {
+          localStorage.setItem("ph_user_id", String(user.id));
         }
-        return response.json();
-      })
-      .then((payload) => {
-        if (payload.user?.username) {
-          const name = payload.user.username;
-          setChatUserName(name);
-          localStorage.setItem("ph_name", name);
-        }
-      })
-      .catch(() => {
-        // Keep existing name if session is invalid.
-      });
+      }
+    });
   }, []);
 
   useEffect(() => {
