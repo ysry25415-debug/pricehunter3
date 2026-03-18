@@ -5,7 +5,9 @@ const isValidEmail = (value) =>
 
 export default function Signup() {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [plan, setPlan] = useState("free");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
@@ -20,6 +22,11 @@ export default function Signup() {
       return;
     }
 
+    if (username.trim().length < 2) {
+      setMessage("Username must be at least 2 characters.");
+      return;
+    }
+
     if (password.trim().length < 6) {
       setMessage("Password must be at least 6 characters.");
       return;
@@ -31,7 +38,7 @@ export default function Signup() {
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, username, plan })
       });
 
       if (!response.ok) {
@@ -90,6 +97,13 @@ export default function Signup() {
 
           {!isCreated && (
             <form onSubmit={handleSignup} className="mt-6 space-y-4">
+              <label className="block text-sm text-muted">Username</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none transition focus:border-accent"
+                placeholder="Your public name"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
               <label className="block text-sm text-muted">Email address</label>
               <input
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none transition focus:border-accent"
@@ -137,6 +151,16 @@ export default function Signup() {
                   </svg>
                 </button>
               </div>
+              <label className="block text-sm text-muted">Plan</label>
+              <select
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none transition focus:border-accent"
+                value={plan}
+                onChange={(event) => setPlan(event.target.value)}
+              >
+                <option value="free">Free - 5 stores</option>
+                <option value="standard">Standard - 10 stores ($1)</option>
+                <option value="pro">Pro - 15 stores ($3)</option>
+              </select>
               <button
                 type="submit"
                 disabled={status === "loading"}

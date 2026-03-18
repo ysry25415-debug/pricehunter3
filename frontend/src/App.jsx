@@ -8,16 +8,29 @@ const navLinkClasses =
   "rounded-lg px-3 py-2 text-sm font-semibold uppercase tracking-wide transition";
 
 const getStoredToken = () => localStorage.getItem("ph_token");
+const getStoredName = () => localStorage.getItem("ph_name");
+const getStoredUserId = () => localStorage.getItem("ph_user_id");
+const getStoredPlan = () => localStorage.getItem("ph_plan");
 
-const getInitials = (email) =>
-  email ? email.trim().slice(0, 2).toUpperCase() : "PH";
+const getInitials = (name) =>
+  name ? name.trim().slice(0, 2).toUpperCase() : "PH";
 
 const interpolate = (start, end, percent) =>
   Math.round(start + (end - start) * percent);
 
 export default function App() {
   const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState(getStoredName() || "");
+  const [userPlan, setUserPlan] = useState(getStoredPlan() || "free");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nameInput, setNameInput] = useState(getStoredName() || "");
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planInput, setPlanInput] = useState(getStoredPlan() || "free");
+  const [planStatus, setPlanStatus] = useState("idle");
+  const [planMessage, setPlanMessage] = useState("");
   const [themeLevel, setThemeLevel] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState([
@@ -151,6 +164,15 @@ export default function App() {
       .then((payload) => {
         if (payload.user?.email) {
           setUserEmail(payload.user.email);
+          setUserName(payload.user.username || payload.user.email);
+          setNameInput(payload.user.username || payload.user.email);
+          const nextPlan = payload.user.plan || "free";
+          setUserPlan(nextPlan);
+          setPlanInput(nextPlan);
+          localStorage.setItem("ph_plan", nextPlan);
+          if (payload.user?.id) {
+            localStorage.setItem("ph_user_id", String(payload.user.id));
+          }
         }
       })
       .catch(() => {
@@ -168,9 +190,110 @@ export default function App() {
     }
     localStorage.removeItem("ph_token");
     localStorage.removeItem("ph_email");
+    localStorage.removeItem("ph_name");
+    localStorage.removeItem("ph_user_id");
+    localStorage.removeItem("ph_plan");
     setUserEmail("");
+    setUserName("");
+    setUserPlan("free");
     setMenuOpen(false);
     window.location.href = "/";
+  };
+
+  const handleOpenSettings = () => {
+    setSaveMessage("");
+    setSettingsOpen(true);
+    setMenuOpen(false);
+    setNameInput(userName || userEmail);
+  };
+
+  const handleOpenPlans = () => {
+    setPlanMessage("");
+    setPlanOpen(true);
+    setMenuOpen(false);
+    setPlanInput(userPlan || "free");
+  };
+
+  const handleSaveProfile = async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setSaveMessage("Please log in again.");
+      return;
+    }
+
+    if (!nameInput.trim() || nameInput.trim().length < 2) {
+      setSaveMessage("Username must be at least 2 characters.");
+      return;
+    }
+
+    setSaveStatus("loading");
+    setSaveMessage("");
+
+    try {
+      const response = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ username: nameInput.trim() })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || "Update failed.");
+      }
+
+      const payload = await response.json();
+      const nextName = payload.user?.username || nameInput.trim();
+      setUserName(nextName);
+      localStorage.setItem("ph_name", nextName);
+      setSaveStatus("idle");
+      setSettingsOpen(false);
+    } catch (error) {
+      setSaveStatus("idle");
+      setSaveMessage(error.message || "Update failed.");
+    }
+  };
+
+  const handleSavePlan = async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setPlanMessage("Please log in again.");
+      return;
+    }
+
+    setPlanStatus("loading");
+    setPlanMessage("");
+
+    try {
+      const response = await fetch("/api/auth/plan", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ plan: planInput })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || "Update failed.");
+      }
+
+      const payload = await response.json();
+      const nextPlan = payload.user?.plan || planInput;
+      setUserPlan(nextPlan);
+      localStorage.setItem("ph_plan", nextPlan);
+      window.dispatchEvent(
+        new CustomEvent("ph-plan-updated", { detail: nextPlan })
+      );
+      setPlanStatus("idle");
+      setPlanOpen(false);
+    } catch (error) {
+      setPlanStatus("idle");
+      setPlanMessage(error.message || "Update failed.");
+    }
   };
 
   const handleAssistantFaq = (item) => {
@@ -219,10 +342,12 @@ export default function App() {
                   className="flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-accent/40"
                   onClick={() => setMenuOpen((open) => !open)}
                 >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-accent">
-                    {getInitials(userEmail)}
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-accent">
+                    {getInitials(userName || userEmail)}
                   </span>
-                  <span className="hidden sm:inline">{userEmail}</span>
+                  <span className="hidden sm:inline">
+                    {userName || userEmail}
+                  </span>
                 </button>
                 {menuOpen && (
                   <div className="fixed right-6 top-20 z-[70] w-64 rounded-2xl border border-white/10 bg-panel/95 p-4 text-sm shadow-2xl">
@@ -230,8 +355,17 @@ export default function App() {
                       Account
                     </p>
                     <div className="mt-3 space-y-2">
-                      <button className="w-full rounded-lg border border-white/10 px-3 py-2 text-left text-white/80 transition hover:border-accent/40">
+                      <button
+                        className="w-full rounded-lg border border-white/10 px-3 py-2 text-left text-white/80 transition hover:border-accent/40"
+                        onClick={handleOpenSettings}
+                      >
                         Account settings
+                      </button>
+                      <button
+                        className="w-full rounded-lg border border-white/10 px-3 py-2 text-left text-white/80 transition hover:border-accent/40"
+                        onClick={handleOpenPlans}
+                      >
+                        Plans
                       </button>
                       <button className="w-full rounded-lg border border-white/10 px-3 py-2 text-left text-white/80 transition hover:border-accent/40">
                         Transactions
@@ -282,6 +416,122 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
         </Routes>
+
+        {settingsOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60">
+            <div className="absolute left-1/2 top-24 w-[360px] max-w-[90vw] -translate-x-1/2 rounded-2xl border border-white/10 bg-panel/95 p-5 shadow-2xl">
+              <div className="flex items-center justify-between text-sm text-muted">
+                <span>Account Settings</span>
+                <button
+                  type="button"
+                  className="text-xs uppercase tracking-[0.2em] text-muted transition hover:text-accent"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-4 space-y-3 text-sm">
+                <label className="block text-muted">Public username</label>
+                <input
+                  value={nameInput}
+                  onChange={(event) => setNameInput(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-accent"
+                  placeholder="Your public name"
+                />
+                {saveMessage && (
+                  <div className="rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-accent">
+                    {saveMessage}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={saveStatus === "loading"}
+                  className="w-full rounded-xl bg-accent px-4 py-3 text-xs font-semibold uppercase tracking-wide text-black transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {saveStatus === "loading" ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {planOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60">
+            <div className="absolute left-1/2 top-24 w-[380px] max-w-[92vw] -translate-x-1/2 rounded-2xl border border-white/10 bg-panel/95 p-5 shadow-2xl">
+              <div className="flex items-center justify-between text-sm text-muted">
+                <span>Plan Management</span>
+                <button
+                  type="button"
+                  className="text-xs uppercase tracking-[0.2em] text-muted transition hover:text-accent"
+                  onClick={() => setPlanOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-4 space-y-2 text-sm">
+                <button
+                  type="button"
+                  className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                    planInput === "free"
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-white/10 text-white/80 hover:border-accent/40"
+                  }`}
+                  onClick={() => setPlanInput("free")}
+                >
+                  <div className="text-sm font-semibold">Free plan - $0</div>
+                  <div className="mt-2 space-y-1 text-xs text-muted">
+                    <p>5 stores compared</p>
+                    <p>10 searches per day</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                    planInput === "standard"
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-white/10 text-white/80 hover:border-accent/40"
+                  }`}
+                  onClick={() => setPlanInput("standard")}
+                >
+                  <div className="text-sm font-semibold">Standard plan - $1</div>
+                  <div className="mt-2 space-y-1 text-xs text-muted">
+                    <p>10 stores compared</p>
+                    <p>200 searches per month</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                    planInput === "pro"
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-white/10 text-white/80 hover:border-accent/40"
+                  }`}
+                  onClick={() => setPlanInput("pro")}
+                >
+                  <div className="text-sm font-semibold">Pro plan - $3</div>
+                  <div className="mt-2 space-y-1 text-xs text-muted">
+                    <p>15 stores compared</p>
+                    <p>Unlimited searches</p>
+                  </div>
+                </button>
+                {planMessage && (
+                  <div className="rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-accent">
+                    {planMessage}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSavePlan}
+                  disabled={planStatus === "loading"}
+                  className="w-full rounded-xl bg-accent px-4 py-3 text-xs font-semibold uppercase tracking-wide text-black transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {planStatus === "loading" ? "Updating..." : "Update plan"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="fixed bottom-6 right-6 z-50">
           <button

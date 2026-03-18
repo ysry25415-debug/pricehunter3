@@ -12,6 +12,8 @@ export const initDb = async () => {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
+      username TEXT,
+      plan TEXT,
       password_hash TEXT,
       created_at TEXT NOT NULL
     );
@@ -22,6 +24,14 @@ export const initDb = async () => {
   const hasPasswordHash = userColumns.some((column) => column.name === "password_hash");
   if (!hasPasswordHash) {
     await db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT");
+  }
+  const hasUsername = userColumns.some((column) => column.name === "username");
+  if (!hasUsername) {
+    await db.exec("ALTER TABLE users ADD COLUMN username TEXT");
+  }
+  const hasPlan = userColumns.some((column) => column.name === "plan");
+  if (!hasPlan) {
+    await db.exec("ALTER TABLE users ADD COLUMN plan TEXT");
   }
 
   await db.exec(`

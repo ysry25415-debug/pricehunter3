@@ -31,6 +31,26 @@ body {
   background: rgba(245, 197, 24, 0.6);
 }
 
+.scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(250, 204, 21, 0.8) rgba(0, 0, 0, 0.35);
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: rgba(250, 204, 21, 0.8);
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+
 /* Google CSE styling to match PriceHunter */
 .gcse-search * {
   font-family: "Space Grotesk", system-ui, sans-serif !important;

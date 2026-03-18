@@ -6,9 +6,15 @@ const isValidEmail = (value) =>
 
 const getStoredToken = () => localStorage.getItem("ph_token");
 const getStoredEmail = () => localStorage.getItem("ph_email");
+const getStoredName = () => localStorage.getItem("ph_name");
+const getStoredUserId = () => localStorage.getItem("ph_user_id");
+const getStoredPlan = () => localStorage.getItem("ph_plan");
 
 export default function Login() {
   const [email, setEmail] = useState(getStoredEmail() || "");
+  const [username, setUsername] = useState(getStoredName() || "");
+  const [userId, setUserId] = useState(getStoredUserId() || "");
+  const [plan, setPlan] = useState(getStoredPlan() || "free");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle");
@@ -35,6 +41,10 @@ export default function Login() {
         if (payload.user?.email) {
           setIsLoggedIn(true);
           setEmail(payload.user.email);
+          setUsername(payload.user.username || payload.user.email);
+          setUserId(String(payload.user.id || ""));
+          setPlan(payload.user.plan || "free");
+          localStorage.setItem("ph_plan", payload.user.plan || "free");
         }
       })
       .catch(() => {
@@ -73,6 +83,17 @@ export default function Login() {
       const payload = await response.json();
       localStorage.setItem("ph_token", payload.token);
       localStorage.setItem("ph_email", payload.user.email);
+      localStorage.setItem("ph_name", payload.user.username || payload.user.email);
+      if (payload.user?.id) {
+        localStorage.setItem("ph_user_id", String(payload.user.id));
+      }
+      if (payload.user?.plan) {
+        localStorage.setItem("ph_plan", payload.user.plan);
+        setPlan(payload.user.plan);
+      } else {
+        localStorage.setItem("ph_plan", "free");
+        setPlan("free");
+      }
       setIsLoggedIn(true);
       setStatus("idle");
       navigate("/");
@@ -92,6 +113,9 @@ export default function Login() {
     }
     localStorage.removeItem("ph_token");
     localStorage.removeItem("ph_email");
+    localStorage.removeItem("ph_name");
+    localStorage.removeItem("ph_user_id");
+    localStorage.removeItem("ph_plan");
     setIsLoggedIn(false);
     setPassword("");
   };
@@ -187,7 +211,7 @@ export default function Login() {
                 You are signed in.
               </p>
               <p className="mt-2 text-sm text-muted">
-                Welcome back, {email}.
+                Welcome back, {username || email}.
               </p>
               <button
                 type="button"

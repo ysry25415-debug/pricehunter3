@@ -42,6 +42,17 @@ const computeProductMetrics = (product) => {
   };
 };
 
+const PLAN_LIMITS = {
+  free: 5,
+  standard: 10,
+  pro: 15
+};
+
+const normalizePlan = (value) => {
+  const plan = String(value || "").trim().toLowerCase();
+  return PLAN_LIMITS[plan] ? plan : "free";
+};
+
 // Simple keyword search over mock products to simulate store integrations.
 const searchProducts = (query) => {
   const combined = [...manualProducts, ...mockProducts];
@@ -71,6 +82,12 @@ const storeSearchTargets = [
     domain: "noon.com",
     searchUrl: (q) =>
       `https://www.noon.com/search/?q=${encodeURIComponent(q)}`
+  },
+  {
+    store: "PriceHunter",
+    domain: "pricehunter.co.uk",
+    searchUrl: (q) =>
+      `https://www.pricehunter.co.uk/prices/${encodeURIComponent(q)}.html`
   },
   {
     store: "AliExpress",
@@ -164,18 +181,20 @@ const storeSearchTargets = [
   }
 ];
 
-const generateStoreSearchResults = (query) => {
+const generateStoreSearchResults = (query, plan) => {
   if (!query) {
     return [];
   }
 
-  const offers = storeSearchTargets.map((target) => ({
+  const limit = PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.free;
+  const searchQuery = `ارخص ${query}`.trim();
+  const offers = storeSearchTargets.slice(0, limit).map((target) => ({
     store: target.store,
     price: null,
     shippingCost: null,
     shippingDays: null,
     rating: null,
-    buyLink: target.searchUrl(query)
+    buyLink: target.searchUrl(searchQuery)
   }));
 
   return [
@@ -257,11 +276,41 @@ initDb().catch((error) => {
   console.error("Failed to initialize database:", error);
 });
 
+const resolveUserPlan = async (req) => {
+  const planParam = normalizePlan(req.query.plan);
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "")
+    : null;
+
+  if (!token) {
+    return planParam;
+  }
+
+  try {
+    const db = await getDb();
+    const session = await db.get(
+      "SELECT * FROM sessions WHERE token = ?",
+      token
+    );
+    if (!session || new Date(session.expires_at) < new Date()) {
+      return planParam;
+    }
+
+    const user = await db.get("SELECT plan FROM users WHERE id = ?", session.user_id);
+    return normalizePlan(user?.plan || planParam);
+  } catch (error) {
+    console.error("Plan resolve failed:", error);
+    return planParam;
+  }
+};
+
 app.get("/api/products/search", async (req, res) => {
   const query = req.query.q || "";
   const sort = req.query.sort || "cheapest";
   const market = req.query.market || "eg";
   const source = req.query.source || "stores";
+  const plan = await resolveUserPlan(req);
 
   let results = [];
 
@@ -269,13 +318,13 @@ app.get("/api/products/search", async (req, res) => {
     if (source === "cj") {
       results = await searchCjProducts(query);
     } else if (source === "stores") {
-      results = generateStoreSearchResults(query);
+      results = generateStoreSearchResults(query, plan);
     } else if (source === "manual") {
       results = searchProducts(query);
     } else if (source === "cse") {
       results = await searchGoogleCse(query, { count: 20 });
       if (!results.length) {
-        results = generateStoreSearchResults(query);
+        results = generateStoreSearchResults(query, plan);
       }
     } else if (source === "mock") {
       results = searchProducts(query);
@@ -297,6 +346,7 @@ app.get("/api/products/search", async (req, res) => {
     sort,
     market,
     source,
+    plan,
     count: sortedResults.length,
     products: sortedResults
   });
@@ -352,14 +402,23 @@ If asked how to use the site, give step-by-step guidance.`;
 });
 
 app.post("/api/auth/signup", async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, username, plan } = req.body || {};
 
-  if (!isValidEmail(email) || !password) {
-    return res.status(400).json({ message: "Email and password are required." });
+  if (!isValidEmail(email) || !password || !username) {
+    return res
+      .status(400)
+      .json({ message: "Email, password, and username are required." });
+  }
+
+  if (String(username).trim().length < 2) {
+    return res
+      .status(400)
+      .json({ message: "Username must be at least 2 characters." });
   }
 
   try {
     const db = await getDb();
+    const selectedPlan = normalizePlan(plan);
     const existing = await db.get("SELECT * FROM users WHERE email = ?", email);
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -368,14 +427,18 @@ app.post("/api/auth/signup", async (req, res) => {
         return res.status(409).json({ message: "Account already exists." });
       }
       await db.run(
-        "UPDATE users SET password_hash = ? WHERE email = ?",
+        "UPDATE users SET password_hash = ?, username = ?, plan = ? WHERE email = ?",
         passwordHash,
+        username,
+        selectedPlan,
         email
       );
     } else {
       await db.run(
-        "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO users (email, username, plan, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
         email,
+        username,
+        selectedPlan,
         passwordHash,
         new Date().toISOString()
       );
@@ -422,7 +485,16 @@ app.post("/api/auth/login", async (req, res) => {
       new Date().toISOString()
     );
 
-    return res.json({ token, user: { email: user.email }, expiresAt });
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username || user.email,
+        plan: normalizePlan(user.plan)
+      },
+      expiresAt
+    });
   } catch (error) {
     console.error("Login failed:", error);
     return res.status(500).json({ message: "Login failed." });
@@ -450,8 +522,16 @@ app.get("/api/auth/me", async (req, res) => {
       return res.status(401).json({ message: "Session expired." });
     }
 
-    const user = await db.get("SELECT email FROM users WHERE id = ?", session.user_id);
-    return res.json({ user });
+    const user = await db.get(
+      "SELECT id, email, username, plan FROM users WHERE id = ?",
+      session.user_id
+    );
+    return res.json({
+      user: {
+        ...user,
+        plan: normalizePlan(user?.plan)
+      }
+    });
   } catch (error) {
     console.error("Session check failed:", error);
     return res.status(500).json({ message: "Session check failed." });
@@ -475,6 +555,100 @@ app.post("/api/auth/logout", async (req, res) => {
   } catch (error) {
     console.error("Logout failed:", error);
     return res.status(500).json({ message: "Logout failed." });
+  }
+});
+
+app.put("/api/auth/profile", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "")
+    : null;
+  const { username } = req.body || {};
+
+  if (!token) {
+    return res.status(401).json({ message: "Missing token." });
+  }
+
+  if (!username || String(username).trim().length < 2) {
+    return res
+      .status(400)
+      .json({ message: "Username must be at least 2 characters." });
+  }
+
+  try {
+    const db = await getDb();
+    const session = await db.get(
+      "SELECT * FROM sessions WHERE token = ?",
+      token
+    );
+
+    if (!session || new Date(session.expires_at) < new Date()) {
+      return res.status(401).json({ message: "Session expired." });
+    }
+
+    await db.run(
+      "UPDATE users SET username = ? WHERE id = ?",
+      username,
+      session.user_id
+    );
+    const user = await db.get(
+      "SELECT id, email, username, plan FROM users WHERE id = ?",
+      session.user_id
+    );
+    return res.json({
+      user: {
+        ...user,
+        plan: normalizePlan(user?.plan)
+      }
+    });
+  } catch (error) {
+    console.error("Profile update failed:", error);
+    return res.status(500).json({ message: "Profile update failed." });
+  }
+});
+
+app.put("/api/auth/plan", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "")
+    : null;
+  const { plan } = req.body || {};
+
+  if (!token) {
+    return res.status(401).json({ message: "Missing token." });
+  }
+
+  const nextPlan = normalizePlan(plan);
+
+  try {
+    const db = await getDb();
+    const session = await db.get(
+      "SELECT * FROM sessions WHERE token = ?",
+      token
+    );
+
+    if (!session || new Date(session.expires_at) < new Date()) {
+      return res.status(401).json({ message: "Session expired." });
+    }
+
+    await db.run(
+      "UPDATE users SET plan = ? WHERE id = ?",
+      nextPlan,
+      session.user_id
+    );
+    const user = await db.get(
+      "SELECT id, email, username, plan FROM users WHERE id = ?",
+      session.user_id
+    );
+    return res.json({
+      user: {
+        ...user,
+        plan: normalizePlan(user?.plan)
+      }
+    });
+  } catch (error) {
+    console.error("Plan update failed:", error);
+    return res.status(500).json({ message: "Plan update failed." });
   }
 });
 
