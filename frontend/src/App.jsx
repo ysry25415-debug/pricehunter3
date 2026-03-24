@@ -304,32 +304,33 @@ export default function App() {
           className="fixed inset-0 -z-10"
           style={{ backgroundColor: `rgba(0, 0, 0, ${overlayOpacity})` }}
         />
-        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/80 shadow-xl">
-          <span>Theme</span>
+        <div className="fixed left-3 top-3 z-40 flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-white/80 shadow-xl sm:left-4 sm:top-4 sm:px-3 sm:text-[10px] sm:tracking-[0.25em]">
+          <span className="hidden sm:inline">Theme</span>
+          <span className="sm:hidden">Mode</span>
           <input
             type="range"
             min="0"
             max="100"
             value={themeLevel}
             onChange={(event) => setThemeLevel(Number(event.target.value))}
-            className="h-1.5 w-24 cursor-pointer accent-accent"
+            className="h-1.5 w-16 cursor-pointer accent-accent sm:w-24"
           />
         </div>
 
-        <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between overflow-visible px-6 py-6">
-          <Link className="text-lg font-semibold tracking-wide text-white" to="/">
+        <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-3 overflow-visible px-4 py-4 sm:px-6 sm:py-6">
+          <Link className="text-base font-semibold tracking-wide text-white sm:text-lg" to="/">
             PriceHunter
           </Link>
-          <div className="flex items-center gap-3 text-sm text-muted">
+          <div className="flex items-center gap-2 text-sm text-muted sm:gap-3">
             <span className="hidden md:inline">Speed-first price comparisons</span>
             {userEmail ? (
               <div className="relative">
                 <button
                   type="button"
-                  className="flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-accent/40"
+                  className="flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-white/80 transition hover:border-accent/40 sm:px-3 sm:text-xs"
                   onClick={() => setMenuOpen((open) => !open)}
                 >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-accent">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-accent">
                     {getInitials(userName || userEmail)}
                   </span>
                   <span className="hidden sm:inline">
@@ -337,7 +338,7 @@ export default function App() {
                   </span>
                 </button>
                 {menuOpen && (
-                  <div className="fixed right-6 top-20 z-[70] w-64 rounded-2xl border border-white/10 bg-panel/95 p-4 text-sm shadow-2xl">
+                  <div className="fixed right-4 top-16 z-[70] w-[calc(100vw-2rem)] max-w-64 rounded-2xl border border-white/10 bg-panel/95 p-4 text-sm shadow-2xl sm:right-6 sm:top-20">
                     <p className="text-xs uppercase tracking-[0.3em] text-muted">
                       Account
                     </p>
@@ -383,13 +384,13 @@ export default function App() {
               <>
                 <Link
                   to="/signup"
-                  className={`${navLinkClasses} bg-accent text-black hover:brightness-110`}
+                  className={`${navLinkClasses} px-2.5 py-2 text-xs sm:px-3 sm:text-sm bg-accent text-black hover:brightness-110`}
                 >
                   Sign up
                 </Link>
                 <Link
                   to="/login"
-                  className={`${navLinkClasses} border border-accent/40 text-accent hover:bg-accent/10`}
+                  className={`${navLinkClasses} px-2.5 py-2 text-xs sm:px-3 sm:text-sm border border-accent/40 text-accent hover:bg-accent/10`}
                 >
                   Log in
                 </Link>

@@ -568,15 +568,15 @@ export default function Home() {
         <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
 
-        <section className="relative z-10 mx-auto max-w-6xl px-6 pb-16 pt-10">
+        <section className="relative z-10 mx-auto max-w-6xl px-4 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-10">
           <div className="max-w-3xl animate-fade-up">
-            <p className="text-sm uppercase tracking-[0.35em] text-muted">
+            <p className="text-[11px] uppercase tracking-[0.35em] text-muted sm:text-sm">
               Compare stores instantly
             </p>
-            <h1 className="mt-4 text-4xl font-semibold leading-tight md:text-5xl">
+            <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-4xl md:text-5xl">
               Find the lowest price across stores worldwide
             </h1>
-            <p className="mt-4 text-base text-muted md:text-lg">
+            <p className="mt-4 max-w-2xl text-sm text-muted sm:text-base md:text-lg">
               PriceHunter scans the fastest deals so you can buy with confidence.
               Sort by total cost, speed, or ratings.
             </p>
@@ -584,24 +584,24 @@ export default function Home() {
 
           <form
             onSubmit={handleSubmit}
-            className="mt-10 flex flex-col gap-4 rounded-2xl border border-white/10 bg-panel/80 p-6 shadow-glow backdrop-blur md:flex-row md:items-center"
+            className="mt-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-panel/80 p-4 shadow-glow backdrop-blur sm:mt-10 sm:gap-4 sm:p-6 md:flex-row md:items-center"
           >
             <input
-              className="w-full flex-1 rounded-xl border border-white/10 bg-black/40 px-5 py-4 text-lg text-white outline-none transition focus:border-accent"
+              className="w-full flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none transition focus:border-accent sm:px-5 sm:py-4 sm:text-lg"
               placeholder="Search for a product, brand, or model"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex flex-col gap-2 sm:flex-row md:items-center">
               <button
                 type="submit"
-                className="rounded-xl bg-accent px-5 py-3 text-sm font-semibold uppercase tracking-wide text-black transition hover:brightness-110"
+                className="w-full rounded-xl bg-accent px-5 py-3 text-sm font-semibold uppercase tracking-wide text-black transition hover:brightness-110 sm:w-auto"
               >
                 Search deals
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-accent/40 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-accent transition hover:bg-accent/10"
+                className="w-full rounded-xl border border-accent/40 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-accent transition hover:bg-accent/10 sm:w-auto"
                 onClick={() => fileInputRef.current?.click()}
               >
                 AI image search
@@ -619,16 +619,16 @@ export default function Home() {
         </section>
       </div>
 
-      <section className="mx-auto max-w-6xl px-6 pb-16">
+      <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
         <div>
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-2xl font-semibold">Top matches</h2>
-              <div className="flex items-center gap-3 text-sm text-muted">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <h2 className="text-xl font-semibold sm:text-2xl">Top matches</h2>
+              <div className="flex items-center gap-3 text-xs text-muted sm:text-sm">
                 <span>Sort by</span>
                 <select
                   value={sort}
                   onChange={handleSortChange}
-                  className="rounded-lg border border-white/10 bg-panel px-3 py-2 text-white"
+                  className="rounded-lg border border-white/10 bg-panel px-3 py-2 text-xs text-white sm:text-sm"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -668,20 +668,20 @@ export default function Home() {
               {products.map((product) => (
                 <article
                   key={product.id}
-                  className="rounded-2xl border border-white/10 bg-panel/80 p-6 shadow-xl transition hover:border-accent/40"
+                  className="rounded-2xl border border-white/10 bg-panel/80 p-4 shadow-xl transition hover:border-accent/40 sm:p-6"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h3 className="text-xl font-semibold">{product.name}</h3>
+                      <h3 className="text-lg font-semibold sm:text-xl">{product.name}</h3>
                       <p className="mt-2 text-sm text-muted">
                         {product.description}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted">
+                    <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left sm:text-right">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-muted sm:text-xs">
                         Lowest total
                       </p>
-                      <p className="text-2xl font-semibold text-accent">
+                      <p className="text-xl font-semibold text-accent sm:text-2xl">
                         {formatMoney(product.lowestTotal)}
                       </p>
                     </div>
@@ -691,13 +691,13 @@ export default function Home() {
                     <img
                       src={product.image}
                       alt={product.name}
-                      className="mt-6 h-48 w-full rounded-xl object-cover"
+                      className="mt-5 h-40 w-full rounded-xl object-cover sm:mt-6 sm:h-48"
                       loading="lazy"
                     />
                   )}
 
-                  <div className="mt-6 overflow-hidden rounded-xl border border-white/10">
-                    <table className="w-full text-sm">
+                  <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 sm:mt-6">
+                    <table className="min-w-[640px] w-full text-xs sm:text-sm">
                       <thead className="bg-black/40 text-xs uppercase tracking-widest text-muted">
                         <tr>
                           <th className="px-3 py-3 text-left">Store</th>
@@ -714,27 +714,27 @@ export default function Home() {
                             key={offer.store}
                             className="border-t border-white/10 text-white/90"
                           >
-                            <td className="px-3 py-3">{offer.store}</td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2.5 sm:py-3">{offer.store}</td>
+                            <td className="px-3 py-2.5 sm:py-3">
                               {Number.isFinite(offer.price)
                                 ? formatMoney(offer.price)
                                 : "-"}
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2.5 sm:py-3">
                               {formatMoney(offer.shippingCost)}{" "}
                               {Number.isFinite(offer.shippingDays)
                                 ? `- ${offer.shippingDays}d`
                                 : ""}
                             </td>
-                            <td className="px-3 py-3 font-semibold text-accent">
+                            <td className="px-3 py-2.5 font-semibold text-accent sm:py-3">
                               {formatMoney(offer.total)}
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2.5 sm:py-3">
                               {Number.isFinite(offer.rating)
                                 ? offer.rating.toFixed(1)
                                 : "-"}
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2.5 sm:py-3">
                               <a
                                 className="text-accent hover:underline"
                                 href={offer.buyLink}
@@ -755,17 +755,17 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="fixed right-4 top-6 z-40 flex flex-col gap-3">
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 sm:gap-3 md:bottom-auto md:top-6">
         <button
           type="button"
-          className="rounded-full border border-accent/60 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+          className="rounded-full border border-accent/60 bg-panel/80 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-accent shadow-glow transition hover:bg-accent/10 sm:px-4 sm:py-3 sm:text-xs sm:tracking-[0.3em]"
           onClick={() => setDropshipOpen((open) => !open)}
         >
           Dropship
         </button>
         <button
           type="button"
-          className="rounded-full border border-accent/60 bg-panel/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-accent shadow-glow transition hover:bg-accent/10"
+          className="rounded-full border border-accent/60 bg-panel/80 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-accent shadow-glow transition hover:bg-accent/10 sm:px-4 sm:py-3 sm:text-xs sm:tracking-[0.3em]"
           onClick={() => setCommunityOpen((open) => !open)}
         >
           Community
@@ -787,7 +787,7 @@ export default function Home() {
       />
 
       <aside
-        className={`fixed left-1/2 top-0 z-50 w-full max-w-4xl -translate-x-1/2 transform border-b border-white/10 bg-panel/95 p-6 shadow-2xl transition overflow-y-auto ${
+        className={`fixed left-1/2 top-0 z-50 w-full max-w-4xl -translate-x-1/2 transform border-b border-white/10 bg-panel/95 p-4 shadow-2xl transition overflow-y-auto sm:p-6 ${
           dropshipOpen ? "translate-y-0" : "-translate-y-full"
         }`}
         style={{ maxHeight: "75vh" }}
@@ -890,13 +890,13 @@ export default function Home() {
             </button>
           </div>
           <div className="mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-muted">
-            Manage your plan from the account menu -> Plans.
+            Manage your plan from the account menu, then open Plans.
           </div>
         </div>
       </aside>
 
       <aside
-        className={`fixed inset-0 z-50 w-full transform border-b border-white/10 bg-panel/95 p-6 shadow-2xl transition overflow-y-auto ${
+        className={`fixed inset-0 z-50 w-full transform border-b border-white/10 bg-panel/95 p-4 shadow-2xl transition overflow-y-auto sm:p-6 ${
           communityOpen ? "translate-y-0" : "-translate-y-full"
         }`}
       >
@@ -1003,7 +1003,7 @@ export default function Home() {
             )}
             <div
               ref={chatScrollRef}
-              className="h-[60vh] max-h-[70vh] space-y-2 overflow-y-scroll rounded-xl border border-white/10 bg-black/40 p-4 text-sm text-white/80 pr-2 scrollbar-visible"
+              className="h-[56vh] max-h-[68vh] space-y-2 overflow-y-scroll rounded-xl border border-white/10 bg-black/40 p-3 pr-2 text-sm text-white/80 scrollbar-visible sm:h-[60vh] sm:p-4"
             >
               {activeMessages.length === 0 && (
                 <div className="text-xs text-muted">
@@ -1033,7 +1033,7 @@ export default function Home() {
                         setAvatarMenuId((prev) => (prev === msg.id ? null : msg.id));
                       }}
                     />
-                    <div className="relative max-w-[75%]">
+                    <div className="relative max-w-[82%] sm:max-w-[75%]">
                       {!isSelf && (
                         <button
                           type="button"
